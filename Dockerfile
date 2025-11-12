@@ -1,5 +1,5 @@
 # 1. Build stage: Gradle로 JAR 생성
-FROM gradle:8.3.2-jdk21 AS build
+FROM gradle:9.2.0-jdk21-jammy AS build
 WORKDIR /app
 COPY . .
 RUN gradle clean build --no-daemon
