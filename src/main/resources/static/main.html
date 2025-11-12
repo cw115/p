@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>메인 페이지</title>
+<style>
+:root{--gap:10px;--radius:10px;--line:#e9edf2;--text:#1f2937;--sub:#6b7280;--blue:#2563eb;}
+*{box-sizing:border-box;}
+body{margin:0;padding:24px;font-family:sans-serif;color:var(--text);background:#f8fafc;}
+h1{font-size:24px;margin:0;}
+h2{font-size:18px;margin:0 0 10px;border-bottom:1px solid var(--line);padding-bottom:5px;}
+.container{max-width:800px;margin:0 auto;}
+.card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:20px;box-shadow:0 4px 16px rgba(0,0,0,.03);margin-bottom:20px;}
+input,button{height:40px;padding:0 12px;border-radius:10px;border:1px solid var(--line);outline:none;}
+button{cursor:pointer;font-weight:600;transition:background .1s;}
+button.primary{background:var(--blue);color:#fff;border-color:var(--blue);}
+button.ghost{background:none;border:1px solid var(--line);}
+.project-item{display:flex;justify-content:space-between;align-items:center;padding:15px 20px;border:1px solid var(--line);border-radius:10px;margin-bottom:10px;cursor:pointer;background:#fff;transition:border-color .1s;}
+.project-item:hover{border-color:var(--blue);background:#f9fafb;}
+.project-info h3{margin:0;font-size:18px;}
+.project-info p{margin:3px 0 0;font-size:14px;color:var(--sub);}
+.muted{color:var(--sub);font-size:14px;}
+.header-nav{display:flex;justify-content: space-between;align-items:center;margin-bottom:20px;}
+</style>
+</head>
+<body>
+<div class="container">
+    <div class="header-nav">
+        <h1>🏗️ 메인: 프로젝트 목록</h1>
+        <div>
+            <button onclick="location.href='board.html'" class="ghost">토론/찬반 게시판</button>
+            <button onclick="location.href='mypage.html'" class="ghost">마이 페이지</button>
+            <button onclick="logout()" class="ghost" style="color:#ef4444;">로그아웃</button>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>새 프로젝트 추가</h2>
+        <div style="display:flex;gap:10px;">
+            <input id="projectName" type="text" placeholder="프로젝트 이름 입력" style="flex:1;">
+            <button id="addProjectBtn" class="primary" style="width:120px;">프로젝트 생성</button>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>진행 중인 프로젝트</h2>
+        <div id="projectList"><p class="muted">프로젝트를 불러오는 중...</p></div>
+    </div>
+</div>
+
+<script>
+if(!localStorage.getItem('userToken')){alert('로그인이 필요합니다.');window.location.href='login.html';}
+
+const API_BASE='/api';
+
+async function api(endpoint,method='GET',body=null){
+    const token=localStorage.getItem('userToken');
+    const res=await fetch(`${API_BASE}${endpoint}`,{
+        method,
+        headers:{'Content-Type':'application/json','Authorization':token?`Bearer ${token}`:''},
+        body:body?JSON.stringify(body):null
+    });
+    if(res.status===401){alert('인증 실패');window.location.href='login.html';return null;}
+    if(res.status===204)return null;
+    const text=await res.text();
+    if(!res.ok)throw new Error(text||'Server Error');
+    try{return JSON.parse(text);}catch(e){return {message:text};}
+}
+
+function logout(){localStorage.removeItem('userToken');localStorage.removeItem('userEmail');window.location.href='login.html';}
+
+function renderProjects(projects){
+    const list=document.getElementById('projectList');list.innerHTML='';
+    if(!projects||projects.length===0){list.innerHTML='<p class="muted">등록된 프로젝트가 없습니다.</p>';return;}
+    projects.forEach(p=>{
+        const item=document.createElement('div');item.className='project-item';
+        item.innerHTML=`
+        <div class="project-info">
+            <h3>${p.projectName} (ID: ${p.projectId})</h3>
+            <p>상태: ${p.status||'N/A'}</p>
+        </div>
+        <button class="primary" style="height:35px;"
+            onclick="location.href='schedule.html?projectId=${p.projectId}&projectTitle=${encodeURIComponent(p.projectName)}'">
+            일정 관리 🗓️
+        </button>`;
+        list.appendChild(item);
+    });
+}
+
+async function fetchProjects(){const projects=await api('/projects');renderProjects(projects);}
+
+document.getElementById('addProjectBtn').onclick=async ()=>{
+    const name=document.getElementById('projectName').value.trim();if(!name){alert('프로젝트 이름 입력');return;}
+    const newProject=await api('/projects','POST',{projectName:name});
+    if(newProject&&newProject.projectId){alert(`"${newProject.projectName}" 생성 완료!`);document.getElementById('projectName').value='';fetchProjects();}
+    else if(newProject&&newProject.message){alert('생성 실패: '+newProject.message);}
+};
+
+fetchProjects();
+</script>
+</body>
+</html>

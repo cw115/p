@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>토론/찬반 게시판</title>
+<style>
+:root{
+    --blue:#2563eb;
+    --line:#e9edf2;
+    --text:#1f2937;
+    --sub:#6b7280;
+    --green:#10b981;
+    --red:#ef4444;
+}
+body {
+    font-family: sans-serif;
+    background:#f8fafc;
+    margin:0;
+    padding:24px;
+}
+.container { max-width:900px; margin:0 auto; }
+h1 { margin-bottom:20px; }
+.nav-btn {
+    background: var(--blue);
+    color:white;
+    padding:10px 15px;
+    border-radius:8px;
+    text-decoration:none;
+    display:inline-block;
+    margin-bottom:20px;
+    font-weight:600;
+    border:none;
+    cursor:pointer;
+}
+.post-card {
+    background:#fff;
+    padding:20px;
+    border-radius:12px;
+    box-shadow:0 4px 16px rgba(0,0,0,.03);
+    border:1px solid var(--line);
+    margin-bottom:15px;
+}
+.post-header {
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom:10px;
+}
+.post-type {
+    font-size:12px;
+    padding:4px 8px;
+    border-radius:999px;
+    font-weight:700;
+    color:white;
+}
+.debate { background: var(--red);}
+.discussion { background: var(--green);}
+.post-title { font-size:18px; font-weight:700; margin:0 0 8px; cursor:pointer; }
+.post-content { color: var(--sub); margin-bottom:15px; }
+.vote-section button {
+    padding:8px 15px;
+    border-radius:8px;
+    cursor:pointer;
+    font-weight:600;
+    margin-right:10px;
+    border:none;
+}
+.vote-for { background:#d1fae5; color:#065f46; border:1px solid #34d399; }
+.vote-against { background:#fee2e2; color:#991b1b; border:1px solid #f87171; }
+.vote-result { margin-top:10px; font-size:14px; }
+.muted { color:var(--sub); font-size:14px; }
+.comment-box { margin-top:10px; border-top:1px solid var(--line); padding-top:10px; }
+.comment { background:#f3f4f6; padding:8px; border-radius:8px; margin-bottom:6px; }
+.comment small { color:var(--sub); }
+#createForm { background:#fff; padding:20px; border-radius:12px; margin-bottom:20px; }
+#createForm input, textarea, select { width:100%; padding:10px; margin-bottom:10px; border:1px solid #ddd; border-radius:8px; }
+.comment-input-row { display: flex; gap: 8px; align-items: flex-end; margin-top: 10px; }
+.comment-input-row input { flex-grow: 1; height: 40px; }
+.comment-input-row button { height: 40px; white-space: nowrap; }
+/* 수정 폼 모달 스타일 */
+#editForm {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 100;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+#editForm .modal-content {
+    background: #fff;
+    max-width: 500px;
+    margin: 50px auto;
+    padding: 20px;
+    border-radius: 12px;
+}
+#editPostTitle, #editPostContent {
+    width: 100%;
+    padding: 10px;
+    margin-bottom: 10px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+}
+</style>
+</head>
+<body>
+<div class="container">
+<h1>💬 토론/찬반 게시판</h1>
+<button class="nav-btn" onclick="openCreateForm()">✏️ 새 글쓰기</button>
+
+<div id="createForm" style="display:none;">
+<h3>게시글 작성</h3>
+<input id="postTitle" placeholder="제목 입력">
+<textarea id="postContent" placeholder="내용 입력"></textarea>
+<select id="postType">
+    <option value="discussion">일반 토론</option>
+    <option value="debate">찬반 토론</option>
+</select>
+<input id="postNickname" placeholder="닉네임 입력 (DB에 있는 닉네임)">
+<button class="nav-btn" style="background:var(--green)" onclick="createPost()">등록</button>
+<button class="nav-btn" style="background:gray" onclick="closeCreateForm()">취소</button>
+</div>
+
+<div id="editForm" style="display:none;">
+    <div class="modal-content">
+        <h3>게시글 수정</h3>
+        <input type="hidden" id="editPostId">
+        <input id="editPostTitle" placeholder="제목 입력">
+        <textarea id="editPostContent" placeholder="내용 입력"></textarea>
+        <button class="nav-btn" style="background:var(--blue)" onclick="updatePost()">저장</button>
+        <button class="nav-btn" style="background:gray" onclick="closeEditForm()">취소</button>
+    </div>
+</div>
+
+<div id="postList"><p class="muted">게시글을 불러오는 중...</p></div>
+</div>
+
+<script>
+// 📌 API 경로 상수화
+const POST_API_PATH = '/api/posts'; 
+const VOTE_API_PATH = '/api/posts'; 
+
+// 📌 Mock user ID (투표는 userId를 요구합니다. DB에 ID=1인 유저가 반드시 존재해야 합니다.)
+const MOCK_USER_ID = 1; 
+
+// 📌 API 통신 함수
+async function api(endpoint, method='GET', body=null){
+    const token = localStorage.getItem('userToken'); 
+    const res = await fetch(endpoint, {
+        method, 
+        headers:{'Content-Type':'application/json','Authorization': token?`Bearer ${token}`:''},
+        body: body?JSON.stringify(body):null
+    });
+    
+    if(res.status === 204) return null; // 삭제(DELETE) 성공 시 204
+    if(res.status === 201) return null; 
+    
+    if(!res.ok){ 
+        const contentType = res.headers.get("content-type");
+        let errorText = `서버 오류 (상태 코드: ${res.status})`;
+        try {
+            const errorBody = contentType && contentType.includes("application/json") ? await res.json() : await res.text();
+            errorText = (typeof errorBody === 'object' && errorBody.message) ? errorBody.message : (typeof errorBody === 'string' && errorBody.length > 0) ? errorBody : errorText;
+        } catch (e) {
+            errorText = `서버 오류 (상태 코드: ${res.status})`;
+        }
+        alert(errorText);
+        throw new Error(errorText); 
+    }
+    return await res.json();
+}
+
+// 폼 제어
+function openCreateForm(){ document.getElementById('createForm').style.display='block'; }
+function closeCreateForm(){ document.getElementById('createForm').style.display='none'; }
+
+// 🚨 수정 폼 제어
+function openEditForm(id, title, content) {
+    document.getElementById('editPostId').value = id;
+    document.getElementById('editPostTitle').value = title;
+    document.getElementById('editPostContent').value = content;
+    document.getElementById('editForm').style.display = 'flex'; // flex로 변경
+}
+function closeEditForm() {
+    document.getElementById('editForm').style.display = 'none';
+}
+
+
+// ✅ 1. 새 게시글 등록 (DB 저장)
+async function createPost(){
+    const title = postTitle.value.trim();
+    const content = postContent.value.trim();
+    const type = postType.value.toLowerCase(); 
+    const nickname = postNickname.value.trim(); 
+    
+    if(!title || !content || !nickname){ alert('제목, 내용, 닉네임을 모두 입력하세요.'); return; }
+
+    const postRequest = {
+        title,
+        content,
+        type,
+        nickname
+    };
+
+    try {
+        await api(POST_API_PATH,'POST', postRequest);
+        alert('게시글이 성공적으로 등록되었습니다.');
+        closeCreateForm();
+        postTitle.value = '';
+        postContent.value = '';
+        postNickname.value = '';
+        fetchPosts(); 
+    } catch(e) {
+        console.error('게시글 등록 실패:', e);
+    }
+}
+
+// ✅ 2. 게시글 불러오기 (DB 조회)
+async function fetchPosts(){
+    try {
+        const posts = await api(POST_API_PATH,'GET');
+        renderPosts(posts || []);
+    } catch(e) {
+        document.getElementById('postList').innerHTML = '<p class="muted">게시글 불러오기에 실패했습니다.</p>';
+        console.error('게시글 조회 실패:', e);
+    }
+}
+
+// ✅ 3. 게시글 출력 및 투표 버튼 연결 (수정/삭제 버튼 추가)
+function renderPosts(posts){
+    const list=document.getElementById('postList'); 
+    list.innerHTML='';
+    if(posts.length===0){ list.innerHTML='<p class="muted">등록된 게시글이 없습니다.</p>'; return; }
+    
+    posts.forEach(p=>{
+        const isDebate = p.postType === 'debate'; 
+        
+        const votesFor = p.votesFor || 0; 
+        const votesAgainst = p.votesAgainst || 0;
+        const total = votesFor + votesAgainst;
+        const percent = total>0?(votesFor/total*100).toFixed(1):0;
+        
+        const div=document.createElement('div');
+        div.className='post-card';
+        div.innerHTML=`
+            <div class="post-header">
+                <span class="post-type ${isDebate?'debate':'discussion'}">${isDebate?'찬반 토론':'일반 토론'}</span>
+                <span class="muted">${p.author || '익명'} | ${p.createdAt?new Date(p.createdAt).toLocaleDateString():'N/A'}</span>
+            </div>
+            <h3 class="post-title" onclick="toggleComments(${p.id})">${p.title}</h3>
+            <p class="post-content">${p.content || '내용 없음'}</p>
+            
+            <div class="action-buttons" style="margin-top:10px;">
+                <button class="nav-btn" style="background:gray; padding:5px 10px; font-size:12px;" onclick="openEditForm(${p.id}, '${p.title.replace(/'/g, "\\'")}', '${p.content.replace(/'/g, "\\'")}')">수정</button>
+                <button class="nav-btn" style="background:var(--red); padding:5px 10px; font-size:12px;" onclick="deletePost(${p.id})">삭제</button>
+            </div>
+            
+            ${isDebate?`
+            <div class="vote-section">
+                <button class="vote-for" onclick="handleVote(${p.id},'찬성')">찬성 (${votesFor})</button>
+                <button class="vote-against" onclick="handleVote(${p.id},'반대')">반대 (${votesAgainst})</button>
+                <div class="vote-result">총 투표수: ${total} | 찬성 ${percent}%</div>
+            </div>`:``}
+            <div id="comments-${p.id}" class="comment-box" style="display:none;">
+                <div id="commentList-${p.id}"><p class="muted">댓글 불러오는 중...</p></div>
+                <div class="comment-input-row">
+                    <input id="commentNickname-${p.id}" placeholder="닉네임 입력 (DB에 있는 닉네임)" style="width:150px; flex-grow:0;">
+                    <textarea id="commentInput-${p.id}" placeholder="댓글 작성..." style="flex-grow:1;"></textarea>
+                    <button class="nav-btn" style="background:var(--blue);" onclick="addComment(${p.id})">등록</button>
+                </div>
+            </div>`;
+        list.appendChild(div);
+    });
+}
+
+// ✅ 4. 실제 투표 처리 (API 호출)
+async function handleVote(postId, voteType){
+    
+    const voteRequest = {
+        userId: MOCK_USER_ID,
+        voteType: voteType 
+    };
+
+    try {
+        await api(`${VOTE_API_PATH}/${postId}/vote`, 'POST', voteRequest); 
+        alert(`투표가 완료되었습니다. (${voteType})`);
+        fetchPosts(); 
+    } catch(e) {
+        console.error('투표 실패:', e);
+    }
+}
+
+// ✅ 5. 댓글 보기/숨기기 및 불러오기 (API 호출)
+async function toggleComments(postId){
+    const commentBox = document.getElementById(`comments-${postId}`);
+    const commentList = document.getElementById(`commentList-${postId}`);
+
+    if (commentBox.style.display === 'none') {
+        commentBox.style.display = 'block';
+        commentList.innerHTML = '<p class="muted">댓글 불러오는 중...</p>';
+        
+        try {
+            const comments = await api(`${POST_API_PATH}/${postId}/comments`, 'GET'); 
+            renderComments(postId, comments);
+        } catch(e) {
+            commentList.innerHTML = '<p class="muted">댓글 불러오기에 실패했습니다.</p>';
+            console.error('댓글 조회 실패:', e);
+        }
+    } else {
+        commentBox.style.display = 'none';
+    }
+}
+
+// ✅ 6. 댓글 출력 (DTO 필드에 맞게 수정)
+function renderComments(postId, comments){
+    const commentList = document.getElementById(`commentList-${postId}`);
+    commentList.innerHTML = '';
+    if(comments.length === 0) {
+        commentList.innerHTML = '<p class="muted">등록된 댓글이 없습니다.</p>';
+        return;
+    }
+    
+    comments.forEach(c => {
+        const commentDiv = document.createElement('div');
+        commentDiv.className = 'comment';
+        const authorNickname = c.authorNickname || '익명';
+
+        commentDiv.innerHTML = `
+            <strong>${authorNickname}</strong>: ${c.content}
+            <small>(${new Date(c.createdAt).toLocaleString()})</small>
+        `;
+        commentList.appendChild(commentDiv);
+    });
+}
+
+// ✅ 7. 댓글 등록 (API 호출)
+async function addComment(postId){
+    const nickname = document.getElementById(`commentNickname-${postId}`).value.trim();
+    const content = document.getElementById(`commentInput-${postId}`).value.trim();
+    
+    if(!nickname || !content){ alert('닉네임과 내용을 모두 입력하세요.'); return; }
+
+    const commentRequest = {
+        nickname: nickname,
+        content: content
+    };
+
+    try {
+        await api(`${POST_API_PATH}/${postId}/comments`, 'POST', commentRequest);
+        alert('댓글이 등록되었습니다.');
+        document.getElementById(`commentInput-${postId}`).value = '';
+        document.getElementById(`commentNickname-${postId}`).value = '';
+        // 댓글 목록을 다시 불러오기 위해 두 번 호출
+        toggleComments(postId); 
+        toggleComments(postId); 
+    } catch(e) {
+        console.error('댓글 등록 실패:', e);
+    }
+}
+
+// ✅ 8. 게시글 수정 (PUT API 호출)
+async function updatePost() {
+    const id = document.getElementById('editPostId').value;
+    const title = document.getElementById('editPostTitle').value.trim();
+    const content = document.getElementById('editPostContent').value.trim();
+
+    if (!title || !content) { alert('제목과 내용을 모두 입력하세요.'); return; }
+
+    const updateRequest = {
+        title,
+        content,
+        // 닉네임 필드를 추가하면 수정 권한 체크 가능
+        // nickname: '작성자 닉네임' 
+    };
+
+    try {
+        await api(`${POST_API_PATH}/${id}`, 'PUT', updateRequest);
+        alert('게시글이 성공적으로 수정되었습니다.');
+        closeEditForm();
+        fetchPosts(); 
+    } catch(e) {
+        console.error('게시글 수정 실패:', e);
+    }
+}
+
+// ✅ 9. 게시글 삭제 (DELETE API 호출)
+async function deletePost(id) {
+    if (!confirm('정말로 이 게시글을 삭제하시겠습니까?')) { return; }
+
+    try {
+        // DELETE는 보통 본문이 없고 응답도 204 No Content
+        await api(`${POST_API_PATH}/${id}`, 'DELETE'); 
+        alert('게시글이 성공적으로 삭제되었습니다.');
+        fetchPosts(); 
+    } catch(e) {
+        console.error('게시글 삭제 실패:', e);
+    }
+}
+
+// 초기 실행
+fetchPosts();
+</script>
+</body>
+</html>

@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>로그인</title>
+<style>
+:root{--gap:10px;--cell:44px;--radius:10px;--line:#e9edf2;--text:#1f2937;--sub:#6b7280;--blue:#2563eb;}
+*{box-sizing:border-box;}
+body{margin:0;padding:24px;font-family:ui-sans-serif,system-ui,Segoe UI,Roboto,Arial,sans-serif;color:var(--text);background:#f8fafc;}
+h1{text-align:center;font-size:24px;margin:0 0 16px;}
+.container{max-width:400px;margin:100px auto 0;padding:0 20px;}
+.card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px;box-shadow:0 4px 16px rgba(0,0,0,.03);}
+.field{display:grid;gap:6px;width:100%;margin-bottom:15px;}
+label{font-size:12px;color:var(--sub);}
+input,button{height:40px;padding:0 12px;border-radius:10px;outline:none;border:1px solid var(--line);background:#fff;color:var(--text);}
+input:focus{border-color:#c7d2fe;box-shadow:0 0 0 3px #eef2ff;}
+button{border:1px solid #dbe3f1;background:#f8fafc;cursor:pointer;font-weight:600;transition:background .1s;width:100%;}
+button.primary{background:var(--blue);color:#fff;border-color:var(--blue);}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);padding:10px 18px;border-radius:10px;font-size:14px;display:none;border:1px solid var(--line);background:#f9fafb;z-index:1001;}
+.toast.ok{border-color:#d1fae5;background:#ecfdf5;color:#065f46;}
+.toast.err{border-color:#fee2e2;background:#fef2f2;color:#991b1b;}
+</style>
+</head>
+<body>
+<div class="container">
+<h1>로그인</h1>
+<div class="card">
+    <div class="field">
+        <label for="email">이메일</label>
+        <input id="email" type="email" placeholder="email@example.com">
+    </div>
+    <div class="field">
+        <label for="password">비밀번호</label>
+        <input id="password" type="password" placeholder="비밀번호">
+    </div>
+    <button id="loginBtn" class="primary">로그인</button>
+    <p style="text-align:center;font-size:14px;margin-top:15px;">
+        계정이 없으신가요? <a href="signup.html" style="color:var(--blue);text-decoration:none;">회원가입</a>
+    </p>
+</div>
+<div id="toast" class="toast"></div>
+</div>
+
+<script>
+const API_BASE = '/api/users';
+const emailInput = document.getElementById('email');
+const passwordInput = document.getElementById('password');
+const toast = document.getElementById('toast');
+let toastTimeout;
+
+function showToast(msg,type){
+    clearTimeout(toastTimeout);
+    toast.textContent=msg;
+    toast.className='toast '+type;
+    toast.style.display='block';
+    toastTimeout=setTimeout(()=>{toast.style.display='none';},3000);
+}
+
+document.getElementById('loginBtn').addEventListener('click', async ()=>{
+    const email = emailInput.value;
+    const password = passwordInput.value;
+    try{
+        const res = await fetch(`${API_BASE}/login`,{
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({email,password})
+        });
+        const responseText = await res.text();
+        if(res.ok){
+            const userId = parseInt(responseText.split('|')[0]);
+            const nickname = responseText.split('|')[1];
+            localStorage.setItem('userToken','mock_token'); // 임시 토큰
+            localStorage.setItem('userId',userId);
+            localStorage.setItem('nickname',nickname);
+            showToast('로그인 성공: '+nickname,'ok');
+            setTimeout(()=>{ window.location.href='main.html'; },1000);
+        } else {
+            showToast('로그인 실패: '+responseText,'err');
+        }
+    }catch(e){ showToast('서버 연결 오류','err'); }
+});
+</script>
+</body>
+</html>

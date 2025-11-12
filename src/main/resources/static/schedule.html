@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>회의 일정 & 시간 관리</title>
+<style>
+:root{
+    --gap:10px;
+    --cell:44px;
+    --radius:10px;
+    --line:#e9edf2;
+    --text:#1f2937;
+    --sub:#6b7280;
+    --blue:#2563eb;
+    --blue-weak:#e8f0ff;
+    --red:#ef4444;
+}
+*{box-sizing:border-box;}
+body{margin:0;padding:24px;font-family:ui-sans-serif,system-ui,Segoe UI,Roboto,Arial,sans-serif;color:var(--text);background:#f8fafc;}
+h1{font-size:20px;margin:0 0 12px;}
+h2{font-size:16px;margin:18px 0 8px;}
+.card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px;box-shadow:0 4px 16px rgba(0,0,0,.03);}
+.row{display:flex;gap:12px;flex-wrap:wrap;align-items:end;}
+.field{display:grid;gap:6px;}
+label{font-size:12px;color:var(--sub);}
+input, select, button, textarea{height:40px;padding:0 12px;border-radius:10px;border:1px solid var(--line);background:#fff;color:var(--text);outline:none;}
+input:focus, select:focus, textarea:focus{border-color:#c7d2fe;box-shadow:0 0 0 3px #eef2ff;}
+button{cursor:pointer;font-weight:600;border:1px solid #dbe3f1;background:#f8fafc;}
+button.primary{background:var(--blue);color:#fff;border-color:var(--blue);}
+button.ghost{background:#fff;}
+.muted{color:var(--sub);font-size:12px;}
+.hr{height:1px;background:var(--line);margin:16px 0;}
+.two{display:grid;gap:16px;grid-template-columns:1fr 1fr;}
+@media(max-width:1024px){.two{grid-template-columns:1fr;}}
+.legend{display:grid;grid-template-columns:repeat(24, var(--cell));gap:6px;margin:4px 0 10px;font-size:11px;color:var(--sub);}
+.grid{display:grid;grid-template-columns:repeat(24, var(--cell));gap:6px;padding:12px;border:1px solid var(--line);border-radius:12px;background:#fff;overflow-x:auto;}
+.slot{width:var(--cell);height:var(--cell);border-radius:8px;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:11px;color:#6b7280;cursor:pointer;transition:transform .06s ease, background .1s ease, border-color .1s ease, color .1s ease;user-select:none;}
+.slot:hover{transform:translateY(-1px);border-color:#cbd5e1;}
+.slot.active{background:var(--blue-weak);border-color:#bcd1ff;color:#1d4ed8;font-weight:700;box-shadow: inset 0 0 0 2px #cfe0ff;}
+.toast{margin-top:10px;padding:10px 12px;border-radius:10px;font-size:14px;display:none;border:1px solid var(--line);background:#f9fafb;}
+.toast.ok{border-color:#d1fae5;background:#ecfdf5;color:#065f46;}
+.toast.err{border-color:#fee2e2;background:#fef2f2;color:#991b1b;}
+.result-item{border:1px solid var(--line);border-radius:10px;padding:12px;display:flex;gap:10px;align-items:center;background:#fff;}
+.chip{font-size:12px;padding:2px 8px;border-radius:999px;border:1px solid var(--line);color:#374151;background:#f9fafb;}
+.ranges{font-variant-numeric:tabular-nums;}
+.modal{display:none;position:fixed;z-index:1000;left:0;top:0;width:100%;height:100%;overflow:auto;background-color:rgba(0,0,0,0.4);padding-top:20px;}
+.modal.show{display:block;}
+.modal-content{background-color:#fefefe;margin:5% auto;padding:24px;border-radius:14px;border:1px solid var(--line);width:95%;max-width:1100px;box-shadow:0 8px 32px rgba(0,0,0,0.2);}
+.schedule-item { cursor: pointer; padding: 10px; margin-top: 8px; border: 1px solid var(--line); border-radius: 8px; transition: background .1s ease; }
+.schedule-item:hover { background: #f0f4f8; }
+.schedule-item.selected { border-color: var(--blue); background: var(--blue-weak); font-weight: 600; }
+</style>
+</head>
+<body>
+
+<h1>🗓️ 프로젝트 회의 일정 및 가능 시간 관리</h1>
+
+<div class="card">
+    <p>프로젝트: <span id="projectTitleDisplay">프로젝트 선택됨</span></p>
+    <button id="openModalBtn" class="primary" style="margin-top:10px;">🤝 참여자 회의 가능 시간 관리</button>
+</div>
+
+<div class="two">
+    <div class="card">
+        <h2>회의 일정 등록 / 조회</h2>
+        <div class="row">
+            <input id="scheduleTitle" type="text" placeholder="일정 제목" style="flex:1;">
+            <input id="scheduleStartTime" type="datetime-local">
+            <input id="scheduleEndTime" type="datetime-local">
+            <button id="addScheduleBtn" class="primary">등록</button>
+        </div>
+        <div id="scheduleToast" class="toast"></div>
+        <div id="scheduleList" style="max-height:400px; overflow-y:auto;"></div>
+    </div>
+    <div class="card">
+        <h2>회의 결과 관리</h2>
+        <div id="selectedScheduleTitle" style="font-weight:600;margin-bottom:10px;">일정을 선택하세요.</div>
+        <div id="resultInputSection" style="display:none;">
+            <textarea id="resultContent" placeholder="회의 결과 입력" style="width:100%;height:100px;padding:10px;border-radius:10px;"></textarea>
+            <button id="addResultBtn" class="primary" style="margin-top:10px;">결과 저장</button>
+            <div id="addResultToast" class="toast"></div>
+        </div>
+        <div id="resultList" style="margin-top:15px;"></div>
+    </div>
+</div>
+
+<div id="timeModal" class="modal">
+    <div class="modal-content">
+        <h1>회의 가능 시간 관리</h1>
+        <section class="card">
+            <h2>1) 내 가능 시간 입력</h2>
+            <div class="row">
+                <div class="field"><label>사용자 닉네임</label><input id="slotUserNickname" type="text" placeholder="DB에 존재하는 닉네임 입력" value="testuser1"></div>
+                <div class="field"><label>요일</label>
+                    <select id="slotDayOfWeek">
+                        <option value="1">월</option><option value="2">화</option><option value="3">수</option>
+                        <option value="4">목</option><option value="5">금</option><option value="6">토</option>
+                        <option value="7">일</option>
+                    </select>
+                </div>
+                <div class="field"><label>&nbsp;</label><button id="loadSlotsBtn" class="ghost">불러오기</button></div>
+                <div class="field"><label>&nbsp;</label><button id="clearSlotsBtn" class="ghost">초기화</button></div>
+                <div class="field"><label>&nbsp;</label><button id="saveSlotsBtn" class="primary">저장</button></div>
+            </div>
+            <div class="legend" id="legendAM"></div>
+            <div id="gridAM" class="grid"></div>
+            <div class="legend" id="legendPM"></div>
+            <div id="gridPM" class="grid"></div>
+            <div id="slotToast" class="toast"></div>
+        </section>
+        <section class="card">
+            <h2>2) 참여자 공통 가능 시간</h2>
+            <div class="row">
+                <div class="field" style="flex:1;"><label>참여자 닉네임 (쉼표 구분)</label><input id="intersectUserNicknames" type="text" placeholder="user1,user2,user3"></div>
+                <div class="field"><label>&nbsp;</label><button id="findIntersectBtn" class="primary">교집합 도출</button></div>
+            </div>
+            <div id="intersectResult" style="margin-top:15px;"></div>
+        </section>
+        <button id="closeModalBtn" class="ghost" style="margin-top:10px;">닫기</button>
+    </div>
+</div>
+
+<script>
+// --- 프로젝트 ID/제목 처리
+const urlParams = new URLSearchParams(window.location.search);
+const currentProjectId = Number(urlParams.get('projectId'));
+const currentProjectTitle = urlParams.get('projectTitle');
+document.getElementById('projectTitleDisplay').textContent = currentProjectTitle || '프로젝트 없음';
+if(!currentProjectId || isNaN(currentProjectId)){ 
+    // alert('프로젝트 ID가 유효하지 않습니다. URL에 ?projectId=숫자 형식으로 ID를 전달해 주세요.'); 
+}
+
+// --- 전역 상태 및 유틸리티
+let selectedScheduleId = null;
+const scheduleListElement = document.getElementById('scheduleList');
+const resultListElement = document.getElementById('resultList');
+const selectedScheduleTitleElement = document.getElementById('selectedScheduleTitle');
+const resultInputSectionElement = document.getElementById('resultInputSection');
+
+function showToast(elementId, message, isSuccess = true) {
+    const toast = document.getElementById(elementId);
+    toast.textContent = message;
+    toast.classList.remove('ok', 'err');
+    toast.classList.add(isSuccess ? 'ok' : 'err');
+    toast.style.display = 'block';
+    setTimeout(() => toast.style.display = 'none', 5000); 
+}
+
+// --- API 통신 함수
+async function api(endpoint, method='GET', body=null){
+    const token = localStorage.getItem('userToken'); 
+    const res = await fetch(endpoint, {
+        method, 
+        headers:{'Content-Type':'application/json','Authorization': token?`Bearer ${token}`:''},
+        body: body?JSON.stringify(body):null
+    });
+    
+    if(res.status === 204 || res.status === 201) return null; 
+    
+    if(!res.ok){ 
+        const contentType = res.headers.get("content-type");
+        let errorText = `서버 오류 (상태 코드: ${res.status})`;
+        try {
+            const errorBody = contentType && contentType.includes("application/json") ? await res.json() : await res.text();
+            errorText = (typeof errorBody === 'object' && errorBody.message) ? errorBody.message : (typeof errorBody === 'string' && errorBody.length > 0) ? errorBody : errorText;
+        } catch (e) {
+            errorText = `서버 오류 (상태 코드: ${res.status})`;
+        }
+        // DB 오류 메시지를 더 사용자 친화적으로 변경
+        if(errorText.includes("Cannot add or update a child row")) {
+             errorText = "DB 외래 키 제약 조건 위반 오류 (입력한 정보가 DB에 존재하지 않음)";
+        }
+        throw new Error(errorText); 
+    }
+    return await res.json();
+}
+
+// --- 시간 슬롯 그리드 (AM/PM)
+const selectedSlots = new Set();
+function formatTime(h,m){ return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:00`; } 
+function getHourMinute(timeStr) { return [parseInt(timeStr.substring(0, 2)), parseInt(timeStr.substring(3, 5))]; }
+function createGrid(containerId,startHour,endHour){
+    const container = document.getElementById(containerId); container.innerHTML='';
+    for(let h=startHour;h<endHour;h++){
+        for(let m=0;m<60;m+=30){
+            const time = formatTime(h,m);
+            const btn = document.createElement('button');
+            btn.className='slot'; btn.dataset.time=time; btn.textContent=m===0?time.substring(0,2):time.substring(3,5);
+            btn.onclick=()=>{ 
+                if(btn.classList.contains('active')){
+                    selectedSlots.delete(time); btn.classList.remove('active'); 
+                } else {
+                    selectedSlots.add(time); btn.classList.add('active'); 
+                } 
+            };
+            container.appendChild(btn);
+        }
+    }
+}
+createGrid('gridAM',0,12);
+createGrid('gridPM',12,24);
+
+// --- 1. 회의 일정 관리 (등록/조회) (유지) ---
+
+function renderSchedules(schedules) {
+    scheduleListElement.innerHTML = '';
+    schedules.forEach(schedule => {
+        const item = document.createElement('div');
+        item.className = 'schedule-item';
+        const start = new Date(schedule.startTime).toLocaleString('ko-KR', { dateStyle: 'short', timeStyle: 'short' });
+        const end = new Date(schedule.endTime).toLocaleString('ko-KR', { timeStyle: 'short' });
+        
+        item.innerHTML = `
+            <div>${schedule.title}</div>
+            <div class="muted">${start} - ${end}</div>
+        `;
+        item.dataset.scheduleId = schedule.scheduleId;
+        item.onclick = () => selectSchedule(schedule);
+        scheduleListElement.appendChild(item);
+    });
+    if (schedules.length > 0 && !selectedScheduleId) {
+        selectSchedule(schedules[0]);
+    } else if (schedules.length > 0 && selectedScheduleId) {
+        const selectedSchedule = schedules.find(s => s.scheduleId === selectedScheduleId);
+        if (selectedSchedule) selectSchedule(selectedSchedule);
+    }
+}
+
+async function loadSchedules() {
+    if (!currentProjectId || isNaN(currentProjectId) || currentProjectId <= 0) return;
+    try {
+        const schedules = await api(`/api/schedules/project/${currentProjectId}`); 
+        renderSchedules(schedules || []);
+    } catch (e) {
+        console.error('일정 불러오기 실패:', e);
+    }
+}
+
+document.getElementById('addScheduleBtn').onclick = async () => {
+    const title = document.getElementById('scheduleTitle').value;
+    const startTime = document.getElementById('scheduleStartTime').value;
+    const endTime = document.getElementById('scheduleEndTime').value;
+
+    if (!title || !startTime || !endTime) {
+        showToast('scheduleToast', '모든 필드를 채워주세요.', false);
+        return;
+    }
+    
+    if (!currentProjectId || isNaN(currentProjectId) || currentProjectId <= 0) {
+        showToast('scheduleToast', '유효한 프로젝트 ID가 없습니다. URL을 확인해 주세요.', false);
+        return;
+    }
+
+    const scheduleRequest = {
+        projectId: currentProjectId, 
+        title: title,
+        startTime: startTime + ':00', 
+        endTime: endTime + ':00' 
+    };
+
+    try {
+        await api('/api/schedules/add', 'POST', scheduleRequest); 
+        loadSchedules();
+        document.getElementById('scheduleTitle').value = '';
+        document.getElementById('scheduleStartTime').value = '';
+        document.getElementById('scheduleEndTime').value = '';
+        showToast('scheduleToast', '회의 일정이 성공적으로 등록되었습니다.', true);
+    } catch (e) {
+        console.error('일정 등록 실패:', e);
+        showToast('scheduleToast', '일정 등록 실패: 프로젝트 ID가 DB에 존재하는지 확인하세요. (' + e.message + ')', false);
+    }
+};
+
+// --- 2. 회의 결과 관리 (수정/삭제 기능 추가됨) ---
+
+function renderResults(results) {
+    resultListElement.innerHTML = '';
+    if (!results || results.length === 0) {
+        resultListElement.innerHTML = '<div class="muted">저장된 회의 결과가 없습니다.</div>';
+        return;
+    }
+
+    results.forEach(result => {
+        const item = document.createElement('div');
+        item.className = 'result-item';
+        item.dataset.resultId = result.resultId; // 결과 ID를 데이터셋에 저장
+
+        item.innerHTML = `
+            <div style="flex:1;">
+                <div class="result-content-display" style="white-space: pre-wrap;">${result.content}</div>
+                <textarea class="edit-result-content" style="width:100%;height:100px;padding:10px;border-radius:10px;display:none;">${result.content}</textarea>
+            </div>
+            <div class="chip">${new Date(result.createdAt).toLocaleDateString('ko-KR')}</div>
+            <div style="display:flex; gap: 8px;">
+                <button class="edit-btn ghost" data-id="${result.resultId}" style="width:50px; height: 32px;">수정</button>
+                <button class="delete-btn ghost" data-id="${result.resultId}" style="width:50px; height: 32px;">삭제</button>
+                <button class="save-btn primary" data-id="${result.resultId}" style="display:none; width:50px; height: 32px;">저장</button>
+                <button class="cancel-btn ghost" data-id="${result.resultId}" style="display:none; width:50px; height: 32px;">취소</button>
+            </div>
+        `;
+        resultListElement.appendChild(item);
+    });
+    
+    attachResultEventListeners(); // 이벤트 리스너 연결
+}
+
+// 동적으로 생성된 결과 항목에 이벤트 리스너를 연결하는 함수
+function attachResultEventListeners() {
+    resultListElement.querySelectorAll('.edit-btn').forEach(btn => {
+        btn.onclick = (e) => toggleEditMode(e.target.dataset.id, true);
+    });
+
+    resultListElement.querySelectorAll('.delete-btn').forEach(btn => {
+        btn.onclick = (e) => handleDelete(e.target.dataset.id);
+    });
+    
+    resultListElement.querySelectorAll('.save-btn').forEach(btn => {
+        btn.onclick = (e) => handleUpdate(e.target.dataset.id);
+    });
+
+    resultListElement.querySelectorAll('.cancel-btn').forEach(btn => {
+        btn.onclick = (e) => toggleEditMode(e.target.dataset.id, false);
+    });
+}
+
+// 편집 모드/보기 모드 전환 로직
+function toggleEditMode(resultId, isEditing) {
+    const item = resultListElement.querySelector(`[data-result-id="${resultId}"]`);
+    if (!item) return;
+
+    const display = item.querySelector('.result-content-display');
+    const textarea = item.querySelector('.edit-result-content');
+    const editBtn = item.querySelector('.edit-btn');
+    const deleteBtn = item.querySelector('.delete-btn');
+    const saveBtn = item.querySelector('.save-btn');
+    const cancelBtn = item.querySelector('.cancel-btn');
+
+    if (isEditing) {
+        textarea.value = display.textContent.trim(); // 현재 내용을 textarea로 복사
+        display.style.display = 'none';
+        textarea.style.display = 'block';
+        editBtn.style.display = 'none';
+        deleteBtn.style.display = 'none';
+        saveBtn.style.display = 'block';
+        cancelBtn.style.display = 'block';
+        textarea.focus();
+    } else {
+        // 취소하거나 저장 후 보기 모드로 돌아갈 때
+        display.style.display = 'block';
+        textarea.style.display = 'none';
+        editBtn.style.display = 'block';
+        deleteBtn.style.display = 'block';
+        saveBtn.style.display = 'none';
+        cancelBtn.style.display = 'none';
+    }
+}
+
+// 결과 수정 API 호출
+async function handleUpdate(resultId) {
+    const item = resultListElement.querySelector(`[data-result-id="${resultId}"]`);
+    const newContent = item.querySelector('.edit-result-content').value.trim();
+
+    if (!newContent) {
+        showToast('addResultToast', '내용을 입력해주세요.', false);
+        return;
+    }
+
+    try {
+        // 백엔드에서 JSON 바디 { "content": "새 내용" }을 받는다고 가정
+        const updateBody = { content: newContent }; 
+        await api(`/api/results/${resultId}`, 'PUT', updateBody); 
+        
+        // 성공 후 UI 업데이트 및 결과 목록 재로드
+        toggleEditMode(resultId, false);
+        loadResults(selectedScheduleId);
+        showToast('addResultToast', '회의 결과가 성공적으로 수정되었습니다.', true);
+    } catch (e) {
+        console.error('결과 수정 실패:', e);
+        showToast('addResultToast', '결과 수정 실패: ' + (e.message || '서버 오류'), false);
+    }
+}
+
+// 결과 삭제 API 호출
+async function handleDelete(resultId) {
+    if (!confirm('정말로 이 회의 결과를 삭제하시겠습니까?')) {
+        return;
+    }
+
+    try {
+        // DELETE API 호출 (204 No Content를 기대)
+        await api(`/api/results/${resultId}`, 'DELETE');
+        
+        // 성공 후 결과 목록 재로드
+        loadResults(selectedScheduleId);
+        showToast('addResultToast', '회의 결과가 성공적으로 삭제되었습니다.', true);
+    } catch (e) {
+        console.error('결과 삭제 실패:', e);
+        showToast('addResultToast', '결과 삭제 실패: ' + (e.message || '서버 오류'), false);
+    }
+}
+
+async function loadResults(scheduleId) {
+    try {
+        const results = await api(`/api/results/${scheduleId}`); 
+        renderResults(results);
+    } catch (e) {
+        console.error('회의 결과 불러오기 실패:', e);
+        renderResults(null);
+    }
+}
+
+function selectSchedule(schedule) {
+    const scheduleItems = document.querySelectorAll('.schedule-item');
+    scheduleItems.forEach(item => item.classList.remove('selected'));
+    
+    const selectedItem = document.querySelector(`[data-schedule-id="${schedule.scheduleId}"]`);
+    if (selectedItem) selectedItem.classList.add('selected');
+
+    selectedScheduleId = schedule.scheduleId;
+    selectedScheduleTitleElement.textContent = `[${schedule.scheduleId}] ${schedule.title}`;
+    resultInputSectionElement.style.display = 'block';
+    
+    loadResults(schedule.scheduleId);
+}
+
+document.getElementById('addResultBtn').onclick = async () => {
+    const content = document.getElementById('resultContent').value;
+    if (!selectedScheduleId || !content) {
+        showToast('addResultToast', '일정을 선택하거나 내용을 입력하세요.', false);
+        return;
+    }
+
+    const resultRequest = {
+        scheduleId: selectedScheduleId,
+        content: content
+    };
+
+    try {
+        await api('/api/results', 'POST', resultRequest); 
+        showToast('addResultToast', '회의 결과가 저장되었습니다.', true);
+        document.getElementById('resultContent').value = '';
+        loadResults(selectedScheduleId);
+    } catch (e) {
+        console.error('결과 저장 실패:', e);
+        showToast('addResultToast', '결과 저장에 실패했습니다: ' + (e.message || '서버 오류'), false);
+    }
+};
+
+// --- 3. 회의 가능 시간 관리 (닉네임 기반으로 수정됨) ---
+
+function resetTimeSlotUI() {
+    selectedSlots.clear();
+    document.querySelectorAll('.slot').forEach(btn => btn.classList.remove('active'));
+}
+
+function activateTimeSlotUI(slots) {
+    resetTimeSlotUI();
+    slots.forEach(slot => {
+        const [startH, startM] = getHourMinute(slot.startTime);
+        const [endH, endM] = getHourMinute(slot.endTime);
+
+        let currentH = startH;
+        let currentM = startM;
+        while (currentH * 60 + currentM < endH * 60 + endM) {
+            const timeStr = formatTime(currentH, currentM);
+            const btn = document.querySelector(`.slot[data-time="${timeStr}"]`);
+            if (btn) {
+                selectedSlots.add(timeStr);
+                btn.classList.add('active');
+            }
+            currentM += 30;
+            if (currentM >= 60) {
+                currentM -= 60;
+                currentH += 1;
+            }
+            if (currentH >= 24) break; 
+        }
+    });
+}
+
+document.getElementById('loadSlotsBtn').onclick = async () => {
+    const nickname = document.getElementById('slotUserNickname').value.trim();
+    const dayOfWeek = document.getElementById('slotDayOfWeek').value;
+
+    if (!nickname) {
+        showToast('slotToast', '사용자 닉네임을 입력하세요.', false);
+        return;
+    }
+
+    try {
+        const allSlots = await api(`/api/time-slots?nickname=${nickname}`); 
+        const filteredSlots = allSlots.filter(slot => slot.dayOfWeek === Number(dayOfWeek));
+        
+        activateTimeSlotUI(filteredSlots);
+        showToast('slotToast', `${nickname} 님의 ${dayOfWeek}요일 가능 시간을 불러왔습니다.`, true);
+    } catch (e) {
+        console.error('슬롯 불러오기 실패:', e);
+        showToast('slotToast', '불러오기 실패: ' + (e.message || '서버 오류'), false);
+    }
+};
+
+document.getElementById('saveSlotsBtn').onclick = async () => {
+    const nickname = document.getElementById('slotUserNickname').value.trim();
+    const dayOfWeek = Number(document.getElementById('slotDayOfWeek').value);
+    
+    if (!nickname) {
+        showToast('slotToast', '유효한 사용자 닉네임을 입력하세요.', false);
+        return;
+    }
+
+    if (selectedSlots.size === 0) {
+        showToast('slotToast', '시간 슬롯을 하나 이상 선택하세요.', false);
+        return;
+    }
+
+    try {
+        const sortedTimes = Array.from(selectedSlots).sort();
+        const ranges = [];
+        let currentRange = null;
+
+        for (const time of sortedTimes) {
+            const [h, m] = getHourMinute(time);
+            
+            if (currentRange) {
+                const [lastH, lastM] = getHourMinute(currentRange.endTime);
+                
+                let nextH = lastH, nextM = lastM + 30;
+                if (nextM >= 60) { nextM -= 60; nextH += 1; }
+
+                if (formatTime(nextH, nextM) === time) {
+                    let newEndH = h, newEndM = m + 30;
+                    if (newEndM >= 60) { newEndM -= 60; newEndH += 1; }
+                    currentRange.endTime = formatTime(newEndH, newEndM);
+                    continue;
+                } else {
+                    ranges.push(currentRange);
+                    currentRange = null;
+                }
+            }
+            
+            if (!currentRange) {
+                let endH = h, endM = m + 30;
+                if (endM >= 60) { endM -= 60; endH += 1; }
+                currentRange = {
+                    startTime: time,
+                    endTime: formatTime(endH, endM)
+                };
+            }
+        }
+        if (currentRange) ranges.push(currentRange);
+
+        for (const range of ranges) {
+            const slotRequest = {
+                nickname: nickname,
+                dayOfWeek: dayOfWeek,
+                startTime: range.startTime,
+                endTime: range.endTime
+            };
+            await api('/api/time-slots', 'POST', slotRequest); 
+        }
+        
+        showToast('slotToast', `${ranges.length}개의 시간대가 ${nickname} 님에게 성공적으로 저장되었습니다.`, true);
+    } catch (e) {
+        console.error('슬롯 저장 실패:', e);
+        showToast('slotToast', '저장 실패: ' + (e.message || '서버 오류'), false);
+    }
+};
+
+document.getElementById('clearSlotsBtn').onclick = () => {
+    resetTimeSlotUI();
+    showToast('slotToast', '선택된 시간을 초기화했습니다. (DB 내용은 변경되지 않음)', true);
+};
+
+// --- 4. 참여자 공통 가능 시간 (닉네임 기반으로 수정됨) ---
+
+async function getUserSlotsByDay(nickname, dayOfWeek) {
+    try {
+        const allSlots = await api(`/api/time-slots?nickname=${nickname}`);
+        const filteredSlots = allSlots.filter(slot => slot.dayOfWeek === Number(dayOfWeek));
+        
+        const slotSet = new Set();
+        filteredSlots.forEach(slot => {
+            const [startH, startM] = getHourMinute(slot.startTime);
+            const [endH, endM] = getHourMinute(slot.endTime);
+
+            let currentH = startH;
+            let currentM = startM;
+            while (currentH * 60 + currentM < endH * 60 + endM) {
+                slotSet.add(formatTime(currentH, currentM).substring(0, 5)); 
+                
+                currentM += 30;
+                if (currentM >= 60) {
+                    currentM -= 60;
+                    currentH += 1;
+                }
+            }
+        });
+        return slotSet;
+    } catch (e) {
+        console.warn(`사용자 ${nickname}의 슬롯 불러오기 실패:`, e.message);
+        return new Set();
+    }
+}
+
+document.getElementById('findIntersectBtn').onclick = async () => {
+    const userNicknamesInput = document.getElementById('intersectUserNicknames').value;
+    const userNicknames = userNicknamesInput.split(',').map(n => n.trim()).filter(n => n.length > 0);
+    const dayOfWeek = Number(document.getElementById('slotDayOfWeek').value); 
+
+    if (userNicknames.length < 2) {
+        alert('2명 이상의 유효한 사용자 닉네임을 쉼표로 구분하여 입력하세요.');
+        return;
+    }
+
+    document.getElementById('intersectResult').innerHTML = '<div class="muted">...데이터 로딩 중...</div>';
+
+    const allUserSlotSets = [];
+    for (const nickname of userNicknames) {
+        const slotSet = await getUserSlotsByDay(nickname, dayOfWeek);
+        allUserSlotSets.push(slotSet);
+    }
+
+    let intersectionSet = allUserSlotSets[0];
+    for (let i = 1; i < allUserSlotSets.length; i++) {
+        intersectionSet = new Set([...intersectionSet].filter(slot => allUserSlotSets[i].has(slot)));
+    }
+
+    const sortedIntersectTimes = Array.from(intersectionSet).sort();
+    
+    const resultRanges = [];
+    let currentRange = null;
+
+    for (const time of sortedIntersectTimes) {
+        const [h, m] = getHourMinute(time + ':00'); 
+        
+        if (currentRange) {
+            const [lastH, lastM] = getHourMinute(currentRange.endTime + ':00');
+            
+            let nextH = lastH, nextM = lastM + 30;
+            if (nextM >= 60) { nextM -= 60; nextH += 1; }
+
+            if (formatTime(nextH, nextM).substring(0, 5) === time) {
+                let newEndH = h, newEndM = m + 30;
+                if (newEndM >= 60) { newEndM -= 60; newEndH += 1; }
+                currentRange.endTime = formatTime(newEndH, newEndM).substring(0, 5);
+                continue;
+            } else {
+                resultRanges.push(currentRange);
+                currentRange = null;
+            }
+        }
+        
+        if (!currentRange) {
+            let endH = h, endM = m + 30;
+            if (endM >= 60) { endM -= 60; endH += 1; }
+            currentRange = {
+                startTime: time,
+                endTime: formatTime(endH, endM).substring(0, 5)
+            };
+        }
+    }
+    if (currentRange) resultRanges.push(currentRange);
+
+    const resultElement = document.getElementById('intersectResult');
+    if (resultRanges.length === 0) {
+        resultElement.innerHTML = '<div class="err" style="display:block;padding:10px;">모든 참여자가 가능한 공통 시간이 없습니다.</div>';
+    } else {
+        const dayMap = {1: '월', 2: '화', 3: '수', 4: '목', 5: '금', 6: '토', 7: '일'};
+        resultElement.innerHTML = `
+            <div style="font-weight:600;">${dayMap[dayOfWeek]}요일 공통 가능 시간 (${userNicknames.length}명)</div>
+            <div class="ranges" style="margin-top:10px; display:flex; flex-wrap:wrap; gap:8px;">
+                ${resultRanges.map(r => `<div class="chip">${r.startTime} ~ ${r.endTime}</div>`).join('')}
+            </div>
+        `;
+    }
+};
+
+// --- 모달 열기/닫기
+document.getElementById('openModalBtn').onclick = ()=>document.getElementById('timeModal').classList.add('show');
+document.getElementById('closeModalBtn').onclick = ()=>document.getElementById('timeModal').classList.remove('show');
+
+// --- 초기 실행
+window.onload = loadSchedules;
+
+</script>
+</body>
+</html>

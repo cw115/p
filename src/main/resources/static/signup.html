@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>회원가입</title>
+    <style>
+        :root{--gap: 10px;--cell: 44px;--radius: 10px;--line: #e9edf2;--text: #1f2937;--sub: #6b7280;--blue: #2563eb;--blue-weak:#e8f0ff;--red: #ef4444;}
+        *{ box-sizing:border-box; }
+        body{ margin:0; padding:24px; font-family: ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,"Apple SD Gothic Neo","Noto Sans KR",sans-serif; color:var(--text); background:#f8fafc; }
+        h1{ font-size:24px; margin:0 0 16px; text-align:center; }
+        .container{ max-width:400px; margin:100px auto 0; padding:0 20px; }
+        .card{ background:#fff; border:1px solid var(--line); border-radius:14px; padding:16px; box-shadow: 0 4px 16px rgba(0,0,0,.03); }
+        .field{ display:grid; gap:6px; width:100%; margin-bottom:15px; }
+        label{ font-size:12px; color:var(--sub); }
+        input, button{ height:40px; padding:0 12px; border-radius:10px; outline:none; border:1px solid var(--line); background:#fff; color:var(--text); }
+        input:focus{ border-color:#c7d2fe; box-shadow:0 0 0 3px #eef2ff; }
+        button{ border:1px solid #dbe3f1; background:#f8fafc; cursor:pointer; font-weight:600; transition:background .1s; width:100%; }
+        button.primary{ background:var(--blue); color:#fff; border-color:var(--blue); }
+        .toast{ position:fixed; bottom:20px; left:50%; transform:translateX(-50%); padding:10px 18px; border-radius:10px; font-size:14px; display:none; border:1px solid var(--line); background:#f9fafb; z-index:1001; }
+        .toast.ok{ border-color:#d1fae5; background:#ecfdf5; color:#065f46; }
+        .toast.err{ border-color:#fee2e2; background:#fef2f2; color:#991b1b; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>회원가입</h1>
+        <div class="card">
+            <div class="field">
+                <label for="nickname">사용자 이름</label>
+                <input id="nickname" type="text" placeholder="이름 (닉네임)">
+            </div>
+            <div class="field">
+                <label for="email">이메일</label>
+                <input id="email" type="email" placeholder="email@example.com">
+            </div>
+            <div class="field">
+                <label for="password">비밀번호</label>
+                <input id="password" type="password" placeholder="비밀번호 (8자 이상)">
+            </div>
+            <button id="signupBtn" class="primary" style="margin-top:5px;">회원가입</button>
+            <p style="text-align:center; font-size:14px; margin-top:15px;">
+                이미 계정이 있으신가요? <a href="login.html" style="color:var(--blue); text-decoration:none;">로그인</a>
+            </p>
+        </div>
+        <div id="toast" class="toast"></div>
+    </div>
+
+    <script>
+        // API 경로는 /api/users로 시작합니다.
+        const API_BASE = '/api/users';
+        const nicknameInput = document.getElementById('nickname');
+        const emailInput = document.getElementById('email');
+        const passwordInput = document.getElementById('password');
+        const toast = document.getElementById('toast');
+        let toastTimeout;
+
+        function showToast(msg, type) {
+            clearTimeout(toastTimeout);
+            toast.textContent = msg;
+            toast.className = 'toast ' + type;
+            if (type === 'ok' || type === 'err') {
+                toast.style.display = 'block';
+            }
+            toastTimeout = setTimeout(() => { toast.style.display = 'none'; }, 3000);
+        }
+
+        document.getElementById('signupBtn').addEventListener('click', async () => {
+            const nickname = nicknameInput.value; // 백엔드 DTO는 nickname 필드를 사용함 [cite: 1020]
+            const email = emailInput.value;
+            const password = passwordInput.value;
+
+            if (!nickname || !email || !password) {
+                showToast('모든 필드를 입력해야 합니다.', 'err');
+                return;
+            }
+
+            try {
+                // 백엔드 엔드포인트: POST /api/users/register
+                const res = await fetch(`${API_BASE}/register`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ nickname, email, password })
+                });
+
+                const responseText = await res.text();
+
+                if (res.ok) {
+                    // 성공 시 201 Created와 함께 메시지를 반환함 [cite: 876]
+                    showToast('회원가입 성공! ' + responseText, 'ok');
+                    setTimeout(() => { window.location.href = 'login.html'; }, 1500);
+                } else {
+                    // 실패 시 409 Conflict 또는 500 Internal Server Error와 함께 메시지를 반환함 [cite: 879, 888]
+                    showToast('회원가입 실패: ' + responseText, 'err');
+                }
+            } catch (e) {
+                showToast('네트워크 오류: 서버에 연결할 수 없습니다.', 'err');
+            }
+        });
+    </script>
+</body>
+</html>
