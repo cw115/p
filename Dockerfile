@@ -1,11 +1,9 @@
-# 1. Build stage: Gradle로 JAR 생성
-FROM gradle:9.2.0-jdk21-jammy AS build
-WORKDIR /app
-COPY . .
-RUN gradle clean build --no-daemon
-
-# 2. Run stage: JAR 실행
+# Run stage: 이미 로컬에서 빌드된 JAR 실행
 FROM eclipse-temurin:21-jdk-jammy
 WORKDIR /app
-COPY --from=build /app/build/libs/*.jar app.jar
-ENTRYPOINT ["java","-jar","/app.jar"]
+
+# 로컬에서 빌드된 JAR 복사
+COPY build/libs/app.jar app.jar
+
+# JAR 실행
+ENTRYPOINT ["java", "-jar", "/app.jar"]
